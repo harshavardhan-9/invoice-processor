@@ -1,0 +1,7 @@
+[
+  {"po_number": "PO-4471", "vendor": "Northwind Traders", "amount": 48250.00, "currency": "USD", "description": "Office supplies Q4"},
+  {"po_number": "PO-3892", "vendor": "Contoso Ltd", "amount": 12500.00, "currency": "USD", "description": "IT equipment"},
+  {"po_number": "PO-5501", "vendor": "Fabrikam Inc", "amount": 75000.00, "currency": "USD", "description": "Manufacturing parts"},
+  {"po_number": "PO-2210", "vendor": "Adventure Works", "amount": 8900.00, "currency": "USD", "description": "Marketing materials"},
+  {"po_number": "PO-6634", "vendor": "Tailspin Toys", "amount": 31000.00, "currency": "USD", "description": "Retail inventory"}
+]

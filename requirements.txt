@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pdfplumber
+pytesseract
+pdf2image
+Pillow
+anthropic
+sqlalchemy
+python-multipart
+aiofiles
+reportlab
