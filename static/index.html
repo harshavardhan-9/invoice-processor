@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Invoice Processor</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --text:#e2e8f0; --muted:#94a3b8;
+          --green:#22c55e; --orange:#f97316; --red:#ef4444; --accent:#6366f1; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif; }
+  header { padding:20px 32px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:32px; }
+  header h1 { font-size:20px; margin:0; }
+  nav button { background:none; border:none; color:var(--muted); font-size:15px; padding:8px 14px; cursor:pointer; border-radius:8px; }
+  nav button.active { background:var(--card); color:var(--text); }
+  main { max-width:1100px; margin:0 auto; padding:32px 24px; }
+  .hidden { display:none !important; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; }
+  #drop { border:2px dashed var(--line); border-radius:12px; padding:56px 20px; text-align:center; cursor:pointer; color:var(--muted); transition:.15s; }
+  #drop.over { border-color:var(--accent); background:#6366f114; }
+  #drop .name { color:var(--text); font-weight:600; font-size:17px; }
+  .btn { background:var(--accent); color:#fff; border:none; padding:12px 24px; border-radius:8px; font-size:15px; cursor:pointer; margin-top:20px; }
+  .btn:disabled { opacity:.4; cursor:not-allowed; }
+  .btn.secondary { background:var(--card); border:1px solid var(--line); }
+  .stage { display:flex; gap:14px; align-items:center; padding:14px 18px; border-bottom:1px solid var(--line); }
+  .stage:last-child { border:none; }
+  .stage .icon { font-size:20px; width:28px; text-align:center; }
+  .stage .nm { font-weight:600; width:190px; }
+  .stage .out { color:var(--muted); flex:1; }
+  .spin { display:inline-block; animation:spin 1s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .badge { display:inline-block; padding:4px 12px; border-radius:999px; font-weight:700; font-size:12px; color:#fff; }
+  .badge.APPROVED { background:var(--green); } .badge.FLAG { background:var(--orange); } .badge.REJECT { background:var(--red); }
+  .big { font-size:30px; padding:10px 28px; margin-right:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; margin:20px 0; }
+  .grid .k { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  .grid .v { font-weight:600; }
+  .reason { border-left:4px solid; padding:14px 18px; border-radius:6px; background:#0f172a; margin:20px 0; }
+  .check { padding:4px 0; }
+  h3 { margin:24px 0 8px; font-size:14px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+  .summary { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:20px; }
+  .summary .n { font-size:30px; font-weight:700; }
+  .filters { margin-bottom:14px; display:flex; gap:8px; }
+  .filters button { background:var(--card); color:var(--muted); border:1px solid var(--line); padding:6px 14px; border-radius:999px; cursor:pointer; }
+  .filters button.active { color:#fff; border-color:var(--accent); background:var(--accent); }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); font-size:14px; vertical-align:top; }
+  th { color:var(--muted); font-weight:500; }
+  tr.row { cursor:pointer; } tr.row:hover { background:#ffffff08; }
+  pre { background:#0f172a; padding:12px; border-radius:8px; overflow:auto; font-size:12px; margin:0; }
+  .err { color:var(--red); margin-top:14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🧾 Invoice Processor</h1>
+  <nav>
+    <button id="tab-process" class="active">Process</button>
+    <button id="tab-dash">Dashboard</button>
+  </nav>
+</header>
+<main>
+
+<section id="view-process">
+  <div id="upload">
+    <div id="drop"><div>📄 Drag &amp; drop an invoice PDF here, or click to browse</div></div>
+    <input type="file" id="file" accept="application/pdf" class="hidden">
+    <button class="btn" id="go" disabled>Process Invoice</button>
+    <div class="err" id="error"></div>
+  </div>
+
+  <div id="live" class="hidden">
+    <div class="card" id="stages" style="padding:0"></div>
+    <div class="card hidden" id="decision" style="margin-top:20px"></div>
+    <button class="btn secondary hidden" id="again">Process Another Invoice</button>
+  </div>
+</section>
+
+<section id="view-dash" class="hidden">
+  <div class="summary" id="summary"></div>
+  <div class="filters" id="filters"></div>
+  <div class="card" style="padding:0; overflow:auto">
+    <table>
+      <thead><tr><th>Run #</th><th>Time</th><th>Vendor</th><th>Invoice #</th><th>Amount</th><th>PO #</th><th>Decision</th><th>Reason</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</section>
+
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const money = n => n == null ? '—' : '$' + Number(n).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+const esc = s => String(s ?? '—').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const ICON = {done:'✅', flagged:'⚠️', rejected:'❌'};
+const COLOR = {APPROVED:'var(--green)', FLAG:'var(--orange)', REJECT:'var(--red)'};
+const STAGE_NAMES = ['PDF Parsed','Fields Extracted','PO Matched','Validation Complete','Decision Made'];
+let file = null, runs = [], filter = 'ALL';
+
+// ---- tabs
+function tab(name) {
+  $('view-process').classList.toggle('hidden', name !== 'process');
+  $('view-dash').classList.toggle('hidden', name !== 'dash');
+  $('tab-process').classList.toggle('active', name === 'process');
+  $('tab-dash').classList.toggle('active', name === 'dash');
+  if (name === 'dash') loadDash();
+}
+$('tab-process').onclick = () => tab('process');
+$('tab-dash').onclick = () => tab('dash');
+
+// ---- upload
+function setFile(f) {
+  if (!f) return;
+  if (!f.name.toLowerCase().endsWith('.pdf')) { $('error').textContent = 'Please choose a PDF file.'; return; }
+  $('error').textContent = '';
+  file = f;
+  $('drop').innerHTML = `<div class="name">📄 ${esc(f.name)}</div><div>${(f.size/1024).toFixed(1)} KB — click to change</div>`;
+  $('go').disabled = false;
+}
+$('drop').onclick = () => $('file').click();
+$('file').onchange = e => setFile(e.target.files[0]);
+$('drop').ondragover = e => { e.preventDefault(); $('drop').classList.add('over'); };
+$('drop').ondragleave = () => $('drop').classList.remove('over');
+$('drop').ondrop = e => { e.preventDefault(); $('drop').classList.remove('over'); setFile(e.dataTransfer.files[0]); };
+
+function stageRow(name, status, output) {
+  const icon = status === 'running' ? '<span class="spin">⏳</span>' : ICON[status];
+  return `<div class="stage"><div class="icon">${icon}</div><div class="nm">${name}</div><div class="out">${esc(output)}</div></div>`;
+}
+
+$('go').onclick = async () => {
+  $('go').disabled = true; $('go').textContent = 'Processing…'; $('error').textContent = '';
+  const fd = new FormData(); fd.append('invoice', file);
+  const respPromise = fetch('/process', {method:'POST', body:fd});
+
+  $('upload').classList.add('hidden'); $('live').classList.remove('hidden');
+  $('decision').classList.add('hidden'); $('again').classList.add('hidden');
+  $('stages').innerHTML = stageRow(STAGE_NAMES[0], 'running', 'Working…');
+
+  try {
+    const res = await respPromise;
+    if (!res.ok) {
+      let msg = res.statusText || 'Server error ' + res.status;
+      try { const d = (await res.json()).detail; if (typeof d === 'string') msg = d; } catch (_) {}
+      throw new Error(msg);
+    }
+    const data = await res.json();
+    const done = [];
+    for (let i = 0; i < data.processing_stages.length; i++) {
+      await sleep(400);
+      const s = data.processing_stages[i];
+      done.push(stageRow(s.name, s.status, s.output));
+      const next = i + 1 < STAGE_NAMES.length ? stageRow(STAGE_NAMES[i+1], 'running', 'Working…') : '';
+      $('stages').innerHTML = done.join('') + next;
+    }
+    await sleep(300);
+    renderDecision(data);
+  } catch (e) {
+    $('stages').innerHTML = `<div class="stage"><div class="icon">❌</div><div class="nm">Error</div><div class="out">${esc(e.message)}</div></div>`;
+  }
+  $('again').classList.remove('hidden');
+};
+
+$('again').onclick = () => {
+  file = null; $('file').value = '';
+  $('drop').innerHTML = '<div>📄 Drag &amp; drop an invoice PDF here, or click to browse</div>';
+  $('go').disabled = true; $('go').textContent = 'Process Invoice';
+  $('live').classList.add('hidden'); $('upload').classList.remove('hidden');
+};
+
+function checkLine(ok, label) { return `<div class="check">${ok ? '✅' : '❌'} ${label}</div>`; }
+
+function decisionHtml(d) {
+  const f = d.extracted_fields || {}, c = d.validation_checks || {}, po = d.matched_po;
+  const field = (k, v) => `<div><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`;
+  return `
+    <div style="display:flex;align-items:center;flex-wrap:wrap">
+      <span class="badge big ${d.decision}">${d.decision}</span>
+      <span>Confidence: <b>${d.confidence_score}%</b></span>
+    </div>
+    <div class="reason" style="border-color:${COLOR[d.decision]}">${esc(d.reason)}</div>
+    <h3>Extracted fields</h3>
+    <div class="grid">
+      ${field('Vendor', f.vendor_name)}${field('Invoice #', f.invoice_number)}${field('PO reference', f.po_reference)}
+      ${field('Total', money(f.total))}${field('Due date', f.due_date)}${field('Currency', f.currency)}
+    </div>
+    <h3>Matched PO</h3>
+    ${po ? `<div class="grid">${field('PO #', po.po_number)}${field('Vendor', po.vendor)}${field('PO amount', money(po.amount))}
+             ${field('Match', d.match_type + ' (' + Math.round(d.match_confidence*100) + '%)')}</div>` : '<div>No PO matched</div>'}
+    <h3>Validation checks</h3>
+    ${checkLine(c.vendor_approved, 'Vendor on approved list')}
+    ${checkLine(c.po_matched, 'PO matched')}
+    ${checkLine(c.vendor_matches_po, 'Invoice vendor matches PO vendor')}
+    ${checkLine(c.currency_matches, 'Currency matches PO')}
+    ${checkLine(c.amount_in_tolerance, 'Amount within ±5% of PO' + (c.variance_pct != null ? ` (variance ${c.variance_pct}%)` : ''))}
+    ${checkLine(!c.is_duplicate, 'Not a duplicate invoice')}
+    ${checkLine(!c.cumulative_exceeds_po, 'Cumulative PO exposure within limit' + (c.cumulative_po_total != null ? ` (${money(c.cumulative_po_total)})` : ''))}`;
+}
+
+function renderDecision(d) {
+  $('decision').innerHTML = decisionHtml(d);
+  $('decision').classList.remove('hidden');
+}
+
+// ---- dashboard
+async function loadDash() {
+  const data = await (await fetch('/runs')).json();
+  runs = data.runs;
+  const s = data.summary, pct = n => s.total ? Math.round(n / s.total * 100) + '%' : '0%';
+  $('summary').innerHTML = [
+    ['Total runs', s.total, ''], ['Approved', pct(s.approved_count), 'var(--green)'],
+    ['Flagged', pct(s.flagged_count), 'var(--orange)'], ['Rejected', pct(s.rejected_count), 'var(--red)']
+  ].map(([l, n, col]) => `<div class="card"><div class="k" style="color:var(--muted)">${l}</div><div class="n" style="color:${col}">${n}</div></div>`).join('');
+  $('filters').innerHTML = [['ALL','All'],['APPROVED','Approved'],['FLAG','Flagged'],['REJECT','Rejected']]
+    .map(([k, l]) => `<button class="${filter === k ? 'active' : ''}" data-f="${k}">${l}</button>`).join('');
+  document.querySelectorAll('#filters button').forEach(b => b.onclick = () => { filter = b.dataset.f; loadDash(); });
+  renderRows();
+}
+
+function renderRows() {
+  const list = runs.filter(r => filter === 'ALL' || r.decision === filter);
+  $('rows').innerHTML = list.length ? list.map(r => `
+    <tr class="row" data-id="${r.id}">
+      <td>${r.id}</td><td>${new Date(r.timestamp).toLocaleString()}</td><td>${esc(r.vendor_name)}</td>
+      <td>${esc(r.invoice_number)}</td><td>${money(r.invoice_total)}</td><td>${esc(r.po_matched)}</td>
+      <td><span class="badge ${r.decision}">${r.decision}</span></td><td>${esc(r.reason)}</td>
+    </tr>
+    <tr class="hidden" id="detail-${r.id}"><td colspan="8"></td></tr>`).join('')
+    : '<tr><td colspan="8" style="color:var(--muted)">No runs yet.</td></tr>';
+  document.querySelectorAll('tr.row').forEach(tr => tr.onclick = () => toggleDetail(tr.dataset.id));
+}
+
+async function toggleDetail(id) {
+  const row = $('detail-' + id);
+  if (!row.classList.contains('hidden')) { row.classList.add('hidden'); return; }
+  const run = await (await fetch('/runs/' + id)).json();
+  row.firstElementChild.innerHTML = `<div style="padding:8px 4px">${decisionHtml(run.result)}</div>`;
+  row.classList.remove('hidden');
+}
+</script>
+</body>
+</html>
