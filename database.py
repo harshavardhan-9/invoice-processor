@@ -89,6 +89,12 @@ def cumulative_for_po(po_number) -> float:
         return sum(r.invoice_total or 0 for r in rows)
 
 
+def clear_runs():
+    with SessionLocal() as s:
+        s.query(InvoiceRun).delete()
+        s.commit()
+
+
 def all_runs():
     with SessionLocal() as s:
         rows = s.query(InvoiceRun).order_by(InvoiceRun.timestamp.desc(), InvoiceRun.id.desc())

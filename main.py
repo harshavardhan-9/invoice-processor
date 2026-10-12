@@ -13,6 +13,8 @@ from validator import decide, validate
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+RESET_ENABLED = os.environ.get("ALLOW_RESET") == "1"
+
 app = FastAPI(title="Invoice Processor")
 database.init_db()
 
@@ -138,7 +140,17 @@ def runs():
             "flagged_count": sum(r["decision"] == "FLAG" for r in rows),
             "rejected_count": sum(r["decision"] == "REJECT" for r in rows),
         },
+        "reset_enabled": RESET_ENABLED,
     }
+
+
+@app.delete("/runs")
+def reset_runs():
+    """Demo helper: wipe run history. Off unless ALLOW_RESET=1 is set."""
+    if not RESET_ENABLED:
+        raise HTTPException(403, "Reset is disabled")
+    database.clear_runs()
+    return {"cleared": True}
 
 
 @app.get("/runs/{run_id}")

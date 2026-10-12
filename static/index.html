@@ -79,6 +79,7 @@
 <section id="view-dash" class="hidden">
   <div class="summary" id="summary"></div>
   <div class="filters" id="filters"></div>
+  <button class="btn secondary hidden" id="reset" style="margin:0 0 14px">Reset demo data</button>
   <div class="card" style="padding:0; overflow:auto">
     <table>
       <thead><tr><th>Run #</th><th>Time</th><th>Vendor</th><th>Invoice #</th><th>Amount</th><th>PO #</th><th>Decision</th><th>Reason</th></tr></thead>
@@ -203,10 +204,17 @@ function renderDecision(d) {
   $('decision').classList.remove('hidden');
 }
 
+$('reset').onclick = async () => {
+  if (!confirm('Delete all run history?')) return;
+  await fetch('/runs', {method: 'DELETE'});
+  loadDash();
+};
+
 // ---- dashboard
 async function loadDash() {
   const data = await (await fetch('/runs')).json();
   runs = data.runs;
+  $('reset').classList.toggle('hidden', !data.reset_enabled);
   const s = data.summary, pct = n => s.total ? Math.round(n / s.total * 100) + '%' : '0%';
   $('summary').innerHTML = [
     ['Total runs', s.total, ''], ['Approved', pct(s.approved_count), 'var(--green)'],
