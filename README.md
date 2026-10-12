@@ -2,6 +2,16 @@
 
 Upload a vendor invoice PDF and the app runs it through a 5-stage pipeline (parse → Claude Haiku extraction → PO match → 3-way validation → decision), showing each stage live. It returns APPROVED / FLAG / REJECT with a plain-English reason, a confidence score, and a stored audit trail.
 
+## Tech stack
+
+| Layer | Tool |
+|---|---|
+| Backend | Python 3.11 + FastAPI (uvicorn) |
+| PDF parsing | pdfplumber, with pytesseract OCR fallback for scanned PDFs |
+| LLM extraction | Anthropic Claude Haiku |
+| Storage | SQLite via SQLAlchemy |
+| Frontend | Single HTML file, vanilla JS |
+
 ## How to run
 
 1. Clone / open the folder.
@@ -44,6 +54,16 @@ Cumulative tracking means earlier runs affect later ones. To reset, stop the ser
 **Take B: reset, then run alone.** `over_tolerance.pdf` → FLAG (EC-1), $51,000 is +5.7% over the PO.
 
 **Take C: reset, then run alone.** `missing_po.pdf` → FLAG at 60% (EC-3), no PO number, matched by vendor name only.
+
+### Expected outputs
+
+| Case | Decision | Confidence | Reason shown |
+|---|---|---|---|
+| Happy path | APPROVED | 100% | Vendor, PO, and amount match within tolerance. Cleared for payment. |
+| EC-1 over tolerance | FLAG | 75% | Invoice amount $51,000.00 is 5.7% above PO amount $48,250.00, outside ±5% tolerance. Flagged for manual review. |
+| EC-2 duplicate | REJECT | 0% | Duplicate invoice: INV-20831 from Northwind Traders was previously submitted on <date> |
+| EC-3 no PO reference | FLAG | 60% | PO matched by vendor name only (no PO reference found). Manual verification required. |
+| EC-4 split PO | FLAG | 70% | Cumulative invoices against PO-4471 total $73,250.00, exceeding PO limit of $48,250.00 by $25,000.00 |
 
 Takes B and C need a fresh database. With earlier invoices on PO-4471, the cumulative rule would fire first and hide the reason you want to show.
 

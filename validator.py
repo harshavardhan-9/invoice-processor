@@ -31,7 +31,7 @@ def validate(extracted: dict, match: dict) -> dict:
 
     cumulative_total = None
     cumulative_exceeds = False
-    if po and total is not None:
+    if po and total is not None and dup is None:  # a duplicate is rejected anyway; don't count it as exposure
         prior = database.cumulative_for_po(po["po_number"])
         cumulative_total = round(prior + total, 2)
         # only a split-PO problem if earlier invoices exist; a lone overage is the tolerance check's job
@@ -64,7 +64,7 @@ def decide(extracted: dict, match: dict, checks: dict) -> dict:
                 "reason": f"Duplicate invoice: {inv} from {vendor} was previously submitted on {when}"}
     if not checks["vendor_approved"]:
         return {"decision": "REJECT", "confidence_score": 0,
-                "reason": f"Vendor {vendor} is not in the approved vendor list"}
+                "reason": f"Vendor {vendor or '(not extracted)'} is not in the approved vendor list"}
     if match["match_type"] == "none":
         if match.get("ref_not_found"):
             return {"decision": "REJECT", "confidence_score": 0,
